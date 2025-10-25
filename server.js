@@ -6,6 +6,9 @@ const PORT = process.env.PORT || 4000;
 
 app.use(cors({ origin: ["http://localhost:3001","http://localhost:3002","http://localhost:3003","http://127.0.0.1:3003"] }));
 app.use(express.json());
+app.get("/", (_req, res) => {
+  res.json({ ok: true, service: "crypto-cashier-backend", time: new Date().toISOString() });
+});
 
 app.get("/portal/overview", (_req,res)=>res.json({revenue30d:12875.42,invoices:42,payouts:7,status:"active"}));
 app.get("/portal/invoices", (_req,res)=>res.json([{id:"inv_1001",amount:125,currency:"USD",status:"paid",created:"2025-10-01"}]));
