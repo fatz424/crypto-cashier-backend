@@ -1,0 +1,23 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Invoice {
+  id        Int      @id @default(autoincrement())
+  customer  String
+  amount    Float
+  status    String
+  createdAt DateTime @default(now())
+}
+
+model Payout {
+  id        Int      @id @default(autoincrement())
+  amount    Float
+  recipient String
+  createdAt DateTime @default(now())
+}
