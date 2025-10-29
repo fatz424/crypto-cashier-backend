@@ -5,15 +5,13 @@ import jwt from "jsonwebtoken";
 
 const app = express();
 
-// === CORS ===
-// For now we hardcode your Netlify URL (bypass Render UI env editing).
-// Change this later to read from process.env.FRONTEND_ORIGIN if you want.
+// CORS: allow your Netlify site in prod; allow any in dev
 const FRONTEND_ORIGIN = "https://crypto-cashier.netlify.app";
 const DEV = process.env.NODE_ENV !== "production";
 
 const corsOpts = DEV
   ? { origin: true, credentials: false, methods: ["GET","POST","PUT","DELETE","OPTIONS"], allowedHeaders: ["Content-Type","Authorization"] }
-  : { origin: FRONTEND_ORIGIN || false, credentials: false, methods: ["GET","POST","PUT","DELETE","OPTIONS"], allowedHeaders: ["Content-Type","Authorization"] };
+  : { origin: FRONTEND_ORIGIN, credentials: false, methods: ["GET","POST","PUT","DELETE","OPTIONS"], allowedHeaders: ["Content-Type","Authorization"] };
 
 app.use(cors(corsOpts));
 app.options("*", cors(corsOpts));
@@ -23,19 +21,23 @@ app.use((req, _res, next) => {
 });
 app.use(express.json());
 
-// === ENV ===
+// Env
 const PORT = Number(process.env.PORT || 4010);
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 const DEMO_EMAIL = (process.env.DEMO_EMAIL || "admin@cashier.app").trim().toLowerCase();
 const DEMO_PASSWORD_PLAIN = (process.env.DEMO_PASSWORD_PLAIN || "Password123!").trim();
 
-console.log("AUTH ENV", { DEMO_EMAIL, PORT, JWT_SET: !!JWT_SECRET, FRONTEND_ORIGIN });
+console.log("AUTH ENV", { DEMO_EMAIL, PORT, JWT_SET: !!JWT_SECRET });
 
-// === Health ===
-app.get("/", (_req, res) => res.json({ ok: true, service: "crypto-cashier-backend", time: new Date().toISOString() }));
-app.get("/health", (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
+// Health + root
+app.get("/", (_req, res) =>
+  res.json({ ok: true, service: "crypto-cashier-backend", time: new Date().toISOString() })
+);
+app.get("/health", (_req, res) =>
+  res.json({ ok: true, time: new Date().toISOString() })
+);
 
-// === Auth guard ===
+// Auth guard
 function authGuard(req, res, next) {
   try {
     const h = req.headers.authorization || "";
@@ -49,25 +51,27 @@ function authGuard(req, res, next) {
   }
 }
 
-// === Login (demo creds) ===
+// Login (demo creds)
 app.post("/auth/login", (req, res) => {
   let { email, password } = req.body || {};
   email = (email || "").trim().toLowerCase();
   password = (password || "").trim();
-  console.log("LOGIN TRY", { email, passLen: password.length });
 
   if (email === DEMO_EMAIL && password === DEMO_PASSWORD_PLAIN) {
     const token = jwt.sign({ sub: email, role: "admin" }, JWT_SECRET, { expiresIn: "1d" });
-    console.log("LOGIN OK");
     return res.json({ token, user: { email, role: "admin" } });
   }
-  console.log("LOGIN FAIL");
   return res.status(401).json({ error: { message: "Invalid credentials" } });
 });
 
-// === Protected mocks ===
-app.get("/auth/me", authGuard, (req, res) => res.json({ user: { email: req.user.sub, role: "admin" } }));
-app.get("/portal/overview", authGuard, (_req, res) => res.json({ revenue30d: 12875.42, invoices: 42, payouts: 7, status: "active" }));
+// Protected mocks
+app.get("/auth/me", authGuard, (req, res) =>
+  res.json({ user: { email: req.user.sub, role: "admin" } })
+);
+
+app.get("/portal/overview", authGuard, (_req, res) =>
+  res.json({ revenue30d: 12875.42, invoices: 42, payouts: 7, status: "active" })
+);
 
 const __invoices = [];
 app.get("/portal/invoices", authGuard, (_req, res) => res.json(__invoices));
