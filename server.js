@@ -5,20 +5,35 @@ import jwt from "jsonwebtoken";
 
 const app = express();
 
-// CORS: allow your Netlify site in prod; allow any in dev
-const FRONTEND_ORIGIN = "https://crypto-cashier.netlify.app";
-const DEV = process.env.NODE_ENV !== "production";
+// === Allowed origins (Netlify + local dev) ===
+const ALLOW_LIST = new Set([
+  "https://crypto-cashier.netlify.app",
+  "http://localhost:3001",
+  "http://127.0.0.1:3001",
+  "http://localhost:3003",
+  "http://127.0.0.1:3003",
+]);
 
-const corsOpts = DEV
-  ? { origin: true, credentials: false, methods: ["GET","POST","PUT","DELETE","OPTIONS"], allowedHeaders: ["Content-Type","Authorization"] }
-  : { origin: FRONTEND_ORIGIN, credentials: false, methods: ["GET","POST","PUT","DELETE","OPTIONS"], allowedHeaders: ["Content-Type","Authorization"] };
+// Dynamic origin function: allow exact matches only (no wildcard)
+const corsOpts = {
+  origin(origin, cb) {
+    // Allow same-origin requests (no Origin header), or allowed origins
+    if (!origin || ALLOW_LIST.has(origin)) return cb(null, true);
+    return cb(new Error(`CORS blocked for origin: ${origin}`));
+  },
+  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
+  allowedHeaders: ["Content-Type","Authorization"],
+  credentials: false,
+  optionsSuccessStatus: 204,
+};
 
-app.use(cors(corsOpts));
-app.options("*", cors(corsOpts));
-app.use((req, _res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+app.use((req, res, next) => {
+  // Always set Vary so caches don't mix origins
+  res.setHeader("Vary", "Origin");
   next();
 });
+app.use(cors(corsOpts));
+app.options("*", cors(corsOpts));
 app.use(express.json());
 
 // Env
@@ -30,12 +45,8 @@ const DEMO_PASSWORD_PLAIN = (process.env.DEMO_PASSWORD_PLAIN || "Password123!").
 console.log("AUTH ENV", { DEMO_EMAIL, PORT, JWT_SET: !!JWT_SECRET });
 
 // Health + root
-app.get("/", (_req, res) =>
-  res.json({ ok: true, service: "crypto-cashier-backend", time: new Date().toISOString() })
-);
-app.get("/health", (_req, res) =>
-  res.json({ ok: true, time: new Date().toISOString() })
-);
+app.get("/", (_req, res) => res.json({ ok: true, service: "crypto-cashier-backend", time: new Date().toISOString() }));
+app.get("/health", (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 // Auth guard
 function authGuard(req, res, next) {
@@ -51,12 +62,11 @@ function authGuard(req, res, next) {
   }
 }
 
-// Login (demo creds)
+// Login (demo)
 app.post("/auth/login", (req, res) => {
   let { email, password } = req.body || {};
   email = (email || "").trim().toLowerCase();
   password = (password || "").trim();
-
   if (email === DEMO_EMAIL && password === DEMO_PASSWORD_PLAIN) {
     const token = jwt.sign({ sub: email, role: "admin" }, JWT_SECRET, { expiresIn: "1d" });
     return res.json({ token, user: { email, role: "admin" } });
@@ -65,13 +75,8 @@ app.post("/auth/login", (req, res) => {
 });
 
 // Protected mocks
-app.get("/auth/me", authGuard, (req, res) =>
-  res.json({ user: { email: req.user.sub, role: "admin" } })
-);
-
-app.get("/portal/overview", authGuard, (_req, res) =>
-  res.json({ revenue30d: 12875.42, invoices: 42, payouts: 7, status: "active" })
-);
+app.get("/auth/me", authGuard, (req, res) => res.json({ user: { email: req.user.sub, role: "admin" } }));
+app.get("/portal/overview", authGuard, (_req, res) => res.json({ revenue30d: 12875.42, invoices: 42, payouts: 7, status: "active" }));
 
 const __invoices = [];
 app.get("/portal/invoices", authGuard, (_req, res) => res.json(__invoices));
